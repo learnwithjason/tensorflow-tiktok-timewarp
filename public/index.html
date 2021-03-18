@@ -1,14 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TikTok Timewarp Filter with TensorFlow.js</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+      }
+
+      main {
+        align-items: center;
+        display: flex;
+        gap: 1rem;
+        height: 100vh;
+        flex-direction: column;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+          'Segoe UI Symbol';
+        justify-content: center;
+        margin: 0 auto;
+        max-width: 90vw;
+        width: 640px;
+      }
+
+      #webcam,
+      #filter,
+      #bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        margin: 0;
+      }
+
+      #chopper-painter {
+        display: none;
+      }
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.0.0/dist/tf.min.js"></script>
   </head>
   <body>
     <h1>TimeWarp</h1>
     <div style="position: relative; height: 80vh">
-      <video id="mystery" height="100%" autoplay></video>
-      <canvas id="result" style="position: absolute; left: 0"></canvas>
-      <canvas id="detection" style="position: absolute; left: 0"></canvas>
+      <video id="webcam" autoplay></video>
+      <canvas id="filter"></canvas>
+      <canvas id="bar"></canvas>
     </div>
     <div>
       <button onclick="performScan()">Scan</button>
@@ -30,13 +78,13 @@
       <button onclick="clearResult()">Clear</button>
     </div>
     <div>
-      <canvas id="bar" style="display: none"></canvas>
+      <canvas id="chopper-painter"></canvas>
     </div>
     <script>
-      const resultCanv = document.getElementById('result')
+      const resultCanv = document.getElementById('filter')
       const resultCtx = resultCanv.getContext('2d')
-      const barCanv = document.getElementById('bar')
-      const detection = document.getElementById('detection')
+      const barCanv = document.getElementById('chopper-painter')
+      const detection = document.getElementById('bar')
       let counter = 0
       let mysteryVideo, camDetails
 
@@ -75,7 +123,7 @@
 
       async function setupStuff() {
         try {
-          mysteryVideo = document.getElementById('mystery')
+          mysteryVideo = document.getElementById('webcam')
           camDetails = await setupWebcam(mysteryVideo)
         } catch (e) {
           console.error(e)
