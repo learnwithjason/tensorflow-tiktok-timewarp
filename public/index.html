@@ -54,6 +54,8 @@
       }
 
       #chopper-painter {
+        width: 640px;
+        height: 1px;
         /* display: none; */
       }
     </style>
@@ -96,7 +98,7 @@
       async function getSlice({
         sourceElement,
         start = 0,
-        videoWidth = 100,
+        videoWidth,
         targetElement,
         videoHeight,
       }) {
@@ -106,10 +108,9 @@
         const slice = tf.slice(currentFrame, [start, 0, 0], [1, videoWidth, 3]);
 
         await tf.browser.toPixels(slice, targetElement);
-
         filter.drawImage(targetElement, 0, start);
 
-        if (start + 1 > videoHeight) {
+        if (start + 1 >= videoHeight) {
           return;
         }
 
@@ -125,10 +126,14 @@
       }
 
       const filterCanvas = document.querySelector('#filter');
+      filterCanvas.height = 480;
+      filterCanvas.width = 640;
       const filter = filterCanvas.getContext('2d');
       const videoElement = document.querySelector('#webcam');
       const width = videoElement.getBoundingClientRect().width;
       const CHOPPA = document.querySelector('#chopper-painter');
+      CHOPPA.height = 480;
+      CHOPPA.width = 640;
       const btn = document.querySelector('button');
 
       btn.addEventListener('click', () => {
