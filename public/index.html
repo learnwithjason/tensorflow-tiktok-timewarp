@@ -31,118 +31,181 @@
         width: 640px;
       }
 
-      h1 {
-        font-size: 1.5rem;
-        margin: 0;
-      }
-
-      .overlay {
-        border: 2px solid red;
-        height: 480px;
-        position: relative;
-        width: 640px;
-      }
-
       #webcam,
       #filter,
       #bar {
         position: absolute;
         top: 0;
         left: 0;
-        width: 640px;
-        height: 480px;
+        height: 100%;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        margin: 0;
       }
 
       #chopper-painter {
-        /* display: none; */
+        display: none;
       }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.0.0/dist/tf.min.js"></script>
   </head>
   <body>
-    <main>
-      <h1>TikTok Timewarp Filter with TensorFlow.js</h1>
-
-      <div class="overlay">
-        <video id="webcam" autoplay muted></video>
-        <canvas id="filter"></canvas>
-        <canvas id="bar"></canvas>
-      </div>
-
-      <button>Press, Then Get Weird</button>
-    </main>
-
-    <canvas id="chopper-painter"></canvas>
-
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+    <h1>TimeWarp</h1>
+    <div style="position: relative; height: 80vh">
+      <video id="webcam" autoplay></video>
+      <canvas id="filter"></canvas>
+      <canvas id="bar"></canvas>
+    </div>
+    <div>
+      <button onclick="performScan()">Scan</button>
+      <label for="chunkSize">Chunk Size:</label>
+      <select name="chunkSize" id="chunky">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="4" selected>4</option>
+        <option value="8">8</option>
+        <option value="16">16</option>
+        <option value="32">32</option>
+        <option value="64">64</option>
+      </select>
+      <label for="color">Colors:</label>
+      <select name="color" id="colorSize">
+        <option value="1">1</option>
+        <option value="3" selected>3</option>
+      </select>
+      <button onclick="clearResult()">Clear</button>
+    </div>
+    <div>
+      <canvas id="chopper-painter"></canvas>
+    </div>
     <script>
-      async function getWebcam() {
-        if (!navigator?.mediaDevices?.getUserMedia) {
-          alert('sad. no webcam :(');
-          return;
-        }
+      const resultCanv = document.getElementById('filter')
+      const resultCtx = resultCanv.getContext('2d')
+      const barCanv = document.getElementById('chopper-painter')
+      const detection = document.getElementById('bar')
+      let counter = 0
+      let mysteryVideo, camDetails
 
-        const webcamStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: 'user',
-          },
-        });
+      async function setupWebcam(videoRef) {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const webcamStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: 'user',
+            },
+          })
 
-        if ('srcObject' in videoElement) {
-          videoElement.srcObject = webcamStream;
+          if ('srcObject' in videoRef) {
+            videoRef.srcObject = webcamStream
+          } else {
+            videoRef.src = window.URL.createObjectURL(webcamStream)
+          }
+
+          return new Promise((resolve, _) => {
+            videoRef.onloadedmetadata = () => {
+              // Prep Canvas
+              const ctx = detection.getContext('2d')
+              const imgWidth = videoRef.clientWidth
+              const imgHeight = videoRef.clientHeight
+              detection.width = imgWidth
+              detection.height = imgHeight
+              resultCanv.width = imgWidth
+              resultCanv.height = imgHeight
+              resolve([ctx, imgHeight, imgWidth])
+            }
+          })
+        } else {
+          alert('No webcam - sorry!')
         }
       }
 
-      async function getSlice({
-        sourceElement,
-        start = 0,
-        videoWidth = 100,
-        targetElement,
-        videoHeight,
-      }) {
-        const currentFrame = tf.browser.fromPixels(sourceElement);
-
-        // process the frame
-        const slice = tf.slice(currentFrame, [start, 0, 0], [1, videoWidth, 3]);
-
-        await tf.browser.toPixels(slice, targetElement);
-
-        filter.drawImage(targetElement, 0, start);
-
-        if (start + 1 > videoHeight) {
-          return;
+      async function setupStuff() {
+        try {
+          mysteryVideo = document.getElementById('webcam')
+          camDetails = await setupWebcam(mysteryVideo)
+        } catch (e) {
+          console.error(e)
         }
-
-        window.requestAnimationFrame(() => {
-          getSlice({
-            sourceElement,
-            targetElement,
-            videoWidth,
-            start: start + 1,
-            videoHeight,
-          });
-        });
       }
 
-      const filterCanvas = document.querySelector('#filter');
-      const filter = filterCanvas.getContext('2d');
-      const videoElement = document.querySelector('#webcam');
-      const width = videoElement.getBoundingClientRect().width;
-      const CHOPPA = document.querySelector('#chopper-painter');
-      const btn = document.querySelector('button');
+      function clearResult() {
+        resultCtx.clearRect(
+          0,
+          0,
+          resultCtx.canvas.width,
+          resultCtx.canvas.height
+        )
+        // prep scanline
+        detection.style.display = 'inline-block'
+      }
 
-      btn.addEventListener('click', () => {
-        const videoHeight = 480;
-        const videoWidth = 640;
-        getSlice({
-          sourceElement: videoElement,
-          targetElement: CHOPPA,
-          videoWidth,
-          videoHeight,
-        });
-      });
+      function performScan() {
+        // reset counter
+        counter = 0
+        // clear previous
+        clearResult()
+        // start scan
+        scanLine(mysteryVideo, camDetails)
+        //
+      }
 
-      getWebcam();
+      async function scanLine(videoRef, camDetails) {
+        const [ctx, imgHeight, imgWidth] = camDetails
+        const chunkSize = +document.getElementById('chunky').value
+        const numChannels = +document.getElementById('colorSize').value
+
+        const cut = tf.tidy(() => {
+          const myTensor = tf.browser.fromPixels(videoRef, numChannels)
+          const resizedTensor = tf.image
+            .resizeBilinear(
+              myTensor,
+              [ctx.canvas.clientHeight, ctx.canvas.clientWidth],
+              true
+            )
+            .div(255)
+
+          // Never overslice
+          const calculatedChunk =
+            counter + chunkSize > resizedTensor.shape[0]
+              ? resizedTensor.shape[0] - counter
+              : chunkSize
+
+          return tf.slice(
+            resizedTensor,
+            [counter, 0, 0],
+            [calculatedChunk, ctx.canvas.clientWidth, numChannels]
+          )
+        })
+
+        await tf.browser.toPixels(cut, barCanv)
+
+        resultCtx.drawImage(barCanv, 0, counter)
+
+        // clear everything each round
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        ctx.strokeStyle = '#0F0'
+        ctx.lineWidth = chunkSize
+        ctx.beginPath()
+        ctx.moveTo(0, counter)
+        ctx.lineTo(ctx.canvas.width, counter)
+        ctx.stroke()
+
+        counter = counter + chunkSize
+
+        if (counter < ctx.canvas.height) {
+          requestAnimationFrame(() => {
+            scanLine(videoRef, camDetails)
+          })
+        } else {
+          detection.style.display = 'none'
+          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+          console.log('DONE', tf.memory().numTensors)
+        }
+      }
+
+      setupStuff()
     </script>
   </body>
 </html>

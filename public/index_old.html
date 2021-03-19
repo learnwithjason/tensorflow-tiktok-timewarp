@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TikTok Timewarp Filter with TensorFlow.js</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+      }
+
+      main {
+        align-items: center;
+        display: flex;
+        gap: 1rem;
+        height: 100vh;
+        flex-direction: column;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+          'Segoe UI Symbol';
+        justify-content: center;
+        margin: 0 auto;
+        max-width: 90vw;
+        width: 640px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        margin: 0;
+      }
+
+      .overlay {
+        border: 2px solid red;
+        height: 480px;
+        position: relative;
+        width: 640px;
+      }
+
+      #webcam,
+      #filter,
+      #bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 640px;
+        height: 480px;
+      }
+
+      #chopper-painter {
+        /* display: none; */
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>TikTok Timewarp Filter with TensorFlow.js</h1>
+
+      <div class="overlay">
+        <video id="webcam" autoplay muted></video>
+        <canvas id="filter"></canvas>
+        <canvas id="bar"></canvas>
+      </div>
+
+      <button>Press, Then Get Weird</button>
+    </main>
+
+    <canvas id="chopper-painter"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+    <script>
+      async function getWebcam() {
+        if (!navigator?.mediaDevices?.getUserMedia) {
+          alert('sad. no webcam :(');
+          return;
+        }
+
+        const webcamStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: 'user',
+          },
+        });
+
+        if ('srcObject' in videoElement) {
+          videoElement.srcObject = webcamStream;
+        }
+      }
+
+      async function getSlice({
+        sourceElement,
+        start = 0,
+        videoWidth = 100,
+        targetElement,
+        videoHeight,
+      }) {
+        const currentFrame = tf.browser.fromPixels(sourceElement);
+
+        // process the frame
+        const slice = tf.slice(currentFrame, [start, 0, 0], [1, videoWidth, 3]);
+
+        await tf.browser.toPixels(slice, targetElement);
+
+        filter.drawImage(targetElement, 0, start);
+
+        if (start + 1 > videoHeight) {
+          return;
+        }
+
+        window.requestAnimationFrame(() => {
+          getSlice({
+            sourceElement,
+            targetElement,
+            videoWidth,
+            start: start + 1,
+            videoHeight,
+          });
+        });
+      }
+
+      const filterCanvas = document.querySelector('#filter');
+      const filter = filterCanvas.getContext('2d');
+      const videoElement = document.querySelector('#webcam');
+      const width = videoElement.getBoundingClientRect().width;
+      const CHOPPA = document.querySelector('#chopper-painter');
+      const btn = document.querySelector('button');
+
+      btn.addEventListener('click', () => {
+        const videoHeight = 480;
+        const videoWidth = 640;
+        getSlice({
+          sourceElement: videoElement,
+          targetElement: CHOPPA,
+          videoWidth,
+          videoHeight,
+        });
+      });
+
+      getWebcam();
+    </script>
+  </body>
+</html>
